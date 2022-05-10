@@ -6,10 +6,6 @@
 #include <dirent.h>
 #include <string.h>
 #include <wait.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
-extern int errno;
 
 int compile(char* file) {
     int stat;
@@ -85,7 +81,7 @@ int run(int input, char* output, char* comp) {
     close(out);
     int s = compare(output, comp);
     remove("a.out");
-//    remove("output.txt");
+    remove("output.txt");
     return s;
 }
 
@@ -141,22 +137,27 @@ char* strmrg(char* str1, char* str2) {
 }
 
 int main(int argc, char** argv) {
-    int fd = open(argv[1], 'r');
-    if(fd == -1) {
-
-        exit(-1);
-    }
     int errorFd = open("errors.txt", O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     if(errorFd == -1) {
-
+        perror("Error in: open");
         exit(-1);
     }
-    int results = open("results.txt", O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+    if(dup2(errorFd, 2) == -1){
+        perror("Error in: dup2");
+        exit(-1);
+    }
+    int fd = open(argv[1], 'r');
+    if(fd == -1) {
+        perror("Error in: open");
+        exit(-1);
+    }
+    int results = open("results.csv", O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     if(results == -1) {
-
+        perror("Error in: open");
         exit(-1);
     }
     if(dup2(fd, 0) == -1){
+        perror("Error in: dup");
         exit(-1);
     }
 
@@ -165,24 +166,22 @@ int main(int argc, char** argv) {
     scanf(" %[^\n]s", input);
     scanf(" %[^\n]s", output);
     close(fd);
-    if(dup2(errorFd, 2) == -1){
-        exit(-1);
-    }
     DIR *dir = opendir(dirPath);
     if(dir == NULL){
         write(1, "Not a valid directory\n", 23);
         exit(-1);
     }
-    if(access(input, F_OK) == -1){
+    if(access(input, F_OK) == -1 && access(input, R_OK) == -1){
         write(1, "Input file not exist\n", 22);
         exit(-1);
     }
-    if(access(output, F_OK) == -1){
+    if(access(output, F_OK) == -1 && access(input, R_OK) == -1){
         write(1, "Output file not exist\n", 22);
         exit(-1);
     }
     int inputFile = open(input, 'r');
     if(inputFile == -1) {
+        perror("Error in: open");
         exit(-1);
     }
 
@@ -196,6 +195,7 @@ int main(int argc, char** argv) {
     }
     char* comp = strmrg(strmrg(pwd,"/"), "comp.out");
     if (chdir(dirPath) == -1) {
+        perror("Error in: chdir");
         exit(-1);
     }
     while ((student = readdir(dir))){
@@ -212,12 +212,13 @@ int main(int argc, char** argv) {
                 }
                 free(student_grade);
             }
-        }
-        if (chdir(dirPath) == -1) {
-            exit(-1);
+            if (chdir("..") == -1) {
+                continue;
+            }
         }
     }
-
+    free(correctOutPut);
+    free(comp);
     close(results);
     close(errorFd);
     closedir(dir);
