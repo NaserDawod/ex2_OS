@@ -7,6 +7,8 @@
 #include <string.h>
 #include <wait.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 extern int errno;
 
 int compile(char* file) {
@@ -31,7 +33,7 @@ int compile(char* file) {
     return 0;
 }
 
-int compare(char* output) {
+int compare(char* output, char* comp) {
     int newstat, pid;
     pid = fork();
     if (pid == -1) {
@@ -39,8 +41,9 @@ int compare(char* output) {
         return -1;
     }
     if(pid == 0){
-        execlp("/home/naser/OperatingSys/ex2/comp.out","/home/naser/OperatingSys/ex2/comp.out", "output.txt", output,NULL);
+        execlp(comp,comp, "output.txt", output,NULL);
         perror("Error in: execlp");
+        write(2, "error", 5);
         exit(0);
     }
     if (waitpid(pid,&newstat,0) == -1) {
@@ -50,7 +53,7 @@ int compare(char* output) {
     return WEXITSTATUS(newstat);
 }
 
-int run(int input, char* output) {
+int run(int input, char* output, char* comp) {
     if(lseek(input,0, SEEK_SET) == -1) { // go back to the start of the file
         perror("Error in: lseek");
         return -1;
@@ -80,13 +83,13 @@ int run(int input, char* output) {
         return -1;
     }
     close(out);
-    int s = compare(output);
+    int s = compare(output, comp);
     remove("a.out");
-    remove("output.txt");
+//    remove("output.txt");
     return s;
 }
 
-int Grade(int input, char* output){
+int Grade(int input, char* output, char* comp){
     DIR *dr = opendir(".");
     if(dr == NULL){
         perror("Error in: opendir");
@@ -101,7 +104,7 @@ int Grade(int input, char* output){
                 closedir(dr);
                 return 10;
             }
-            grade = run(input,output);
+            grade = run(input,output, comp);
             closedir(dr);
             return grade;
         }
@@ -143,7 +146,7 @@ int main(int argc, char** argv) {
 
         exit(-1);
     }
-    int errorFd = open("errors.txt", O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+    int errorFd = open("errors.txt", O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     if(errorFd == -1) {
 
         exit(-1);
@@ -151,9 +154,6 @@ int main(int argc, char** argv) {
     int results = open("results.txt", O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     if(results == -1) {
 
-        exit(-1);
-    }
-    if(dup2(errorFd, 2) == -1){
         exit(-1);
     }
     if(dup2(fd, 0) == -1){
@@ -165,7 +165,9 @@ int main(int argc, char** argv) {
     scanf(" %[^\n]s", input);
     scanf(" %[^\n]s", output);
     close(fd);
-
+    if(dup2(errorFd, 2) == -1){
+        exit(-1);
+    }
     DIR *dir = opendir(dirPath);
     if(dir == NULL){
         write(1, "Not a valid directory\n", 23);
@@ -188,6 +190,11 @@ int main(int argc, char** argv) {
     char pwd[150];
     char* student_grade;
     getcwd(pwd,150);
+    char* correctOutPut = strmrg(strmrg(pwd,"/"), output);
+    if(access(correctOutPut, F_OK) == -1) {
+        correctOutPut = output;
+    }
+    char* comp = strmrg(strmrg(pwd,"/"), "comp.out");
     if (chdir(dirPath) == -1) {
         exit(-1);
     }
@@ -196,10 +203,11 @@ int main(int argc, char** argv) {
             if (chdir(student->d_name) == -1){
                 continue;
             }
-            int grade = Grade(inputFile, output);
+            int grade = Grade(inputFile, correctOutPut, comp);
             if (grade != -1){
                 student_grade = strmrg(student->d_name, comment(grade));
                 if (write(results, student_grade, strlen(student_grade)) == -1) {
+                    perror("Error in: write");
                     continue;
                 }
                 free(student_grade);

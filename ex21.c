@@ -21,10 +21,10 @@ char read_char(int fd, int close_fd2) {
     return c;
 }
 
-int main(int argc, char** argv) {
-    if(argc != 3){
-        exit(2);
-    }
+int main2(int argc, char** argv) {
+//    if(argc != 3){
+//        exit(2);
+//    }
     size_t check = 1, check2 = 1;
     int file1 = open(argv[1], 'r');
     if (file1 < 0){
